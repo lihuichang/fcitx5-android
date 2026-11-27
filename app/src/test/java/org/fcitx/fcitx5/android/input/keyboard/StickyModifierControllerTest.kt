@@ -75,8 +75,27 @@ class StickyModifierControllerTest {
     }
 
     @Test
-    fun lateUpCannotFinishAReplacementGesture() {
+    fun heldKeyUsesThePreviouslyLatchedStateAndItsReleaseStillActsAsAClick() {
         val controller = StickyModifierController()
+        tap(controller, StickyModifier.Ctrl)
+        assertTrue(controller.isLatched(StickyModifier.Ctrl))
+
+        // 按住期间不改状态：快捷键看到的是按下前已锁存的 Ctrl。
+        val held = controller.onDown(StickyModifier.Ctrl)
+        assertNotNull(held)
+        assertNull("同一枚键尚未抬手，不接受重复按下", controller.onDown(StickyModifier.Ctrl))
+        val consumption = controller.consume()
+        assertEquals(listOf(StickyModifier.Ctrl), consumption?.modifiers)
+        controller.finish(consumption!!)
+        assertFalse(controller.isLatched(StickyModifier.Ctrl))
+
+        // 抬手仍然是一次点击：按现有语义重新点亮。
+        controller.onUp(StickyModifier.Ctrl, held, clickEligible = true, cancelled = false)
+        assertTrue(controller.isLatched(StickyModifier.Ctrl))
+    }
+
+    @Test
+    fun lateUpCannotFinishAReplacementGesture() {        val controller = StickyModifierController()
         val oldGesture = controller.onDown(StickyModifier.Ctrl)
         controller.cancelAll()
         val newGesture = controller.onDown(StickyModifier.Ctrl)

@@ -7,6 +7,7 @@ import org.fcitx.fcitx5.android.data.theme.ThemeManager
 import org.fcitx.fcitx5.android.data.theme.ThemePreset
 import org.fcitx.fcitx5.android.ui.main.settings.behavior.editor.EditorApplicationShadow
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -105,5 +106,30 @@ class WaterRippleOcclusionTest {
                 KeyDef.Appearance.Text("a", 20f, border = KeyDef.Appearance.Border.Off)
             ).shouldOccludeWaterRipple()
         )
+    }
+
+    @Test
+    fun stickyActivationRefreshesTheOcclusionOnlyWhenTheKeyStopsCoveringTheRipple() {
+        val def = KeyDef.Appearance.Text("a", 20f).apply {
+            activeBackgroundColor = Color.TRANSPARENT
+        }
+        val key = TextKeyView(context, ThemePreset.PixelLight, def)
+        var changes = 0
+        key.addWaterRippleOcclusionChangedListener { changes++ }
+
+        key.setStickyActive(true)
+        assertEquals(0, changes)
+        assertTrue(key.shouldOccludeWaterRipple())
+
+        key.isActivated = true
+        assertEquals("透明激活底色让键不再遮挡水波纹", 1, changes)
+        assertFalse(key.shouldOccludeWaterRipple())
+
+        key.isActivated = false
+        assertEquals("熄灭后重新遮挡", 2, changes)
+        assertTrue(key.shouldOccludeWaterRipple())
+
+        key.setStickyActive(false)
+        assertEquals("遮挡状态没变就不通知", 2, changes)
     }
 }

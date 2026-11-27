@@ -227,6 +227,35 @@ class KeyEditorFormTest {
         assertEquals(0.2f, saved["weight"])
     }
 
+    @Test fun recreatedStickyFormKeepsOtherDirectionAndLongPressWhenOneSlotChanges() = page { activity ->
+        fun steps(text: String) = listOf(mapOf("type" to "text", "text" to text))
+        val args = options(mapOf(
+            "type" to "StickyModifierKey", "modifier" to "ctrl", "label" to "Ctrl",
+            "swipeUp" to mapOf("macro" to steps("old-up")),
+            "swipeDown" to mapOf("macro" to steps("old-down")),
+            "longPress" to mapOf("macro" to steps("old-long")),
+            "swipeUpLabel" to "Up",
+            "swipeDownLabel" to "Down",
+            "weight" to 0.3f,
+            "textColor" to 0xFF112233.toInt()
+        ))
+        val form = KeyEditorForm(activity, args)
+        val recreated = KeyEditorForm(activity, args, parcel(Bundle().also(form::saveState)))
+        val newUp = arrayListOf<Map<*, *>>(mapOf("type" to "text", "text" to "new-up"))
+        recreated.acceptMacroResult(ActivityResult(Activity.RESULT_OK, Intent()
+            .putExtra(MacroEditorDialogFragment.EXTRA_TARGET_TOKEN, "swipeUp")
+            .putExtra(MacroEditorDialogFragment.EXTRA_MACRO_RESULT, newUp)))
+
+        val saved = recreated.validatedDraft(false)!!
+        assertEquals(newUp, (saved["swipeUp"] as Map<*, *>)["macro"])
+        assertEquals(steps("old-down"), ((saved["swipeDown"] as Map<*, *>)["macro"] as List<*>).filterNotNull())
+        assertEquals(steps("old-long"), ((saved["longPress"] as Map<*, *>)["macro"] as List<*>).filterNotNull())
+        assertEquals("Up", saved["swipeUpLabel"])
+        assertEquals("Down", saved["swipeDownLabel"])
+        assertEquals(0.3f, saved["weight"])
+        assertEquals(0xFF112233.toInt(), saved["textColor"])
+    }
+
     private fun splitCheckbox(root: ViewGroup): CheckBox = root.descendants.filterIsInstance<CheckBox>().single {
         it.text == root.context.getString(R.string.text_keyboard_layout_key_split_after)
     }

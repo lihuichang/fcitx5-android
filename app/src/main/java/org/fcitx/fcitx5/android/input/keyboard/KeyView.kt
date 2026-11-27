@@ -99,6 +99,9 @@ abstract class KeyView(
      */
     private var waterRippleFillColor: Int? = null
 
+    /** 水波纹层依赖这枚键的遮挡状态；点亮色/主题变化时要让它重建遮挡快照。 */
+    private val waterRippleOcclusionChangedListeners = LinkedHashSet<() -> Unit>()
+
     init {
         val prefs = ThemeManager.prefs
         bordered = prefs.keyBorder.getValue()
@@ -268,6 +271,19 @@ abstract class KeyView(
         return hasKeyBorder
     }
 
+    internal fun addWaterRippleOcclusionChangedListener(listener: () -> Unit) {
+        waterRippleOcclusionChangedListeners.add(listener)
+    }
+
+    internal fun removeWaterRippleOcclusionChangedListener(listener: () -> Unit) {
+        waterRippleOcclusionChangedListeners.remove(listener)
+    }
+
+    private fun notifyWaterRippleOcclusionChanged(previouslyOccluded: Boolean) {
+        if (previouslyOccluded == shouldOccludeWaterRipple()) return
+        waterRippleOcclusionChangedListeners.toList().forEach { it() }
+    }
+
     private fun applyStandardBackground(theme: Theme) {
         val bkgColor = resolveBackgroundColor(theme, defaultBackgroundColor(theme))
         waterRippleFillColor = bkgColor
@@ -366,11 +382,36 @@ abstract class KeyView(
      */
     internal fun setStickyActive(enabled: Boolean) {
         if (isStickyActiveAppearance == enabled) return
+        val previouslyOccluded = shouldOccludeWaterRipple()
         isStickyActiveAppearance = enabled
         stickySuppressesActivatedHighlight = enabled
         applyStickyAwareBackground()
         setupPressHighlight(pressHighlightMask)
         onStickyActiveAppearanceChanged(enabled)
+        notifyWaterRippleOcclusionChanged(previouslyOccluded)
+    }
+
+    override fun setActivated(activated: Boolean) {
+        val changed = isActivated != activated
+        val previouslyOccluded = isStickyActiveAppearance && shouldOccludeWaterRipple()
+        super.setActivated(activated)
+        if (changed && isStickyActiveAppearance) {
+            updateStickyWaterRippleFillColor()
+            notifyWaterRippleOcclusionChanged(previouslyOccluded)
+        }
+    }
+
+    /**
+     * 让水波纹遮挡色跟随当前键底：点亮时用激活底色，熄灭或未启用粘滞外观时回落到普通底色。
+     * 只改颜色不会改变遮挡轮廓，但 alpha 为 0 的激活色会让键从“遮挡”变成“透明”。
+     */
+    private fun updateStickyWaterRippleFillColor() {
+        if (def.transparentBackground || usesSpecialBackground()) return
+        waterRippleFillColor = when {
+            isStickyActiveAppearance && isActivated -> stickyActiveBackgroundColor()
+            hasKeyBorder -> resolveBackgroundColor(theme, defaultBackgroundColor(theme))
+            else -> null
+        }
     }
 
     protected open fun onStickyActiveAppearanceChanged(enabled: Boolean) {}
@@ -394,11 +435,10 @@ abstract class KeyView(
     private fun applyStickyAwareBackground() {
         // 占位键与空格/回车/布局切换键有各自的特形背景，粘滞键不会命中，保持原样。
         if (def.transparentBackground || usesSpecialBackground()) return
+        updateStickyWaterRippleFillColor()
         if (hasKeyBorder) {
             val normalColor = resolveBackgroundColor(theme, defaultBackgroundColor(theme))
             val normal = standardBackgroundDrawable(normalColor, theme)
-            waterRippleFillColor =
-                if (isStickyActiveAppearance) stickyActiveBackgroundColor() else normalColor
             appearanceView.background = if (!isStickyActiveAppearance) normal
             else StateListDrawable().apply {
                 addState(
@@ -541,6 +581,7 @@ abstract class KeyView(
      * Update theme without rebuilding view
      */
     open fun updateTheme(newTheme: Theme) {
+        val previouslyOccluded = shouldOccludeWaterRipple()
         theme = newTheme
 
         if (def.transparentBackground) {
@@ -566,6 +607,7 @@ abstract class KeyView(
         if (w > 0 && h > 0) {
             onSizeChanged(w, h, w, h)
         }
+        notifyWaterRippleOcclusionChanged(previouslyOccluded)
     }
 }
 

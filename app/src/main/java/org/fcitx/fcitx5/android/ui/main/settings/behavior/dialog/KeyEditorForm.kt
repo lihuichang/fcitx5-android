@@ -2042,46 +2042,73 @@ class KeyEditorForm(
      */
     private fun applyMacroStepsToSlot(slot: String, steps: List<Any>) {
         val draft = buildDraftKeyData()
-        val isMacroKey = keyData["type"] == "MacroKey"
+        // 以当前表单类型为准，而不是旧 keyData：宿主重建后 draft 可能仍是旧类型。
+        val isMacroKey = selectedType == "MacroKey"
+        val isStickyModifierKey = selectedType == "StickyModifierKey"
         when (slot) {
             SLOT_TAP -> {
                 macroTapStepsData = steps
                 draft["tap"] = mapOf("macro" to steps)
             }
             SLOT_SWIPE_UP -> {
-                if (isMacroKey) {
-                    macroSwipeUpStepsData = steps
-                    applyDirectionalSwipeDraft(
-                        draft,
-                        macroSwipeUpStepsData,
-                        macroSwipeDownStepsData
-                    )
-                } else {
-                    nonMacroSwipeUpStepsData = steps
-                    appendDirectionalSwipeLabels(draft)
-                    applyDirectionalSwipeDraft(
-                        draft,
-                        nonMacroSwipeUpStepsData,
-                        nonMacroSwipeDownStepsData
-                    )
+                when {
+                    isMacroKey -> {
+                        macroSwipeUpStepsData = steps
+                        applyDirectionalSwipeDraft(
+                            draft,
+                            macroSwipeUpStepsData,
+                            macroSwipeDownStepsData
+                        )
+                    }
+                    isStickyModifierKey -> {
+                        // 只改上滑，另一方向与方向标签必须留在草稿里。
+                        stickyModifierSwipeUpStepsData = steps
+                        applyDirectionalSwipeDraft(
+                            draft,
+                            stickyModifierSwipeUpStepsData,
+                            stickyModifierSwipeDownStepsData
+                        )
+                        appendDirectionalSwipeLabels(draft)
+                    }
+                    else -> {
+                        nonMacroSwipeUpStepsData = steps
+                        appendDirectionalSwipeLabels(draft)
+                        applyDirectionalSwipeDraft(
+                            draft,
+                            nonMacroSwipeUpStepsData,
+                            nonMacroSwipeDownStepsData
+                        )
+                    }
                 }
             }
             SLOT_SWIPE_DOWN -> {
-                if (isMacroKey) {
-                    macroSwipeDownStepsData = steps
-                    applyDirectionalSwipeDraft(
-                        draft,
-                        macroSwipeUpStepsData,
-                        macroSwipeDownStepsData
-                    )
-                } else {
-                    nonMacroSwipeDownStepsData = steps
-                    appendDirectionalSwipeLabels(draft)
-                    applyDirectionalSwipeDraft(
-                        draft,
-                        nonMacroSwipeUpStepsData,
-                        nonMacroSwipeDownStepsData
-                    )
+                when {
+                    isMacroKey -> {
+                        macroSwipeDownStepsData = steps
+                        applyDirectionalSwipeDraft(
+                            draft,
+                            macroSwipeUpStepsData,
+                            macroSwipeDownStepsData
+                        )
+                    }
+                    isStickyModifierKey -> {
+                        stickyModifierSwipeDownStepsData = steps
+                        applyDirectionalSwipeDraft(
+                            draft,
+                            stickyModifierSwipeUpStepsData,
+                            stickyModifierSwipeDownStepsData
+                        )
+                        appendDirectionalSwipeLabels(draft)
+                    }
+                    else -> {
+                        nonMacroSwipeDownStepsData = steps
+                        appendDirectionalSwipeLabels(draft)
+                        applyDirectionalSwipeDraft(
+                            draft,
+                            nonMacroSwipeUpStepsData,
+                            nonMacroSwipeDownStepsData
+                        )
+                    }
                 }
             }
             SLOT_SWIPE -> {
@@ -2089,8 +2116,14 @@ class KeyEditorForm(
                 if (steps.isNotEmpty()) draft["swipe"] = mapOf("macro" to steps) else draft.remove("swipe")
             }
             SLOT_LONG_PRESS -> {
-                macroLongPressStepsData = steps
-                draft["longPress"] = mapOf("macro" to steps)
+                if (isStickyModifierKey) {
+                    stickyModifierLongPressStepsData = steps
+                    if (steps.isEmpty()) draft.remove("longPress")
+                    else draft["longPress"] = mapOf("macro" to steps)
+                } else {
+                    macroLongPressStepsData = steps
+                    draft["longPress"] = mapOf("macro" to steps)
+                }
             }
             else -> return
         }
